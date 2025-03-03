@@ -11,6 +11,8 @@ import {
 
 import { useState } from "react";
 import axios from "axios";
+import { downloadModel } from "./src/api/model";
+import ProgressBar from "./src/components/ProgressBar";
 
 function App(): React.JSX.Element {
   type Message = {
@@ -88,6 +90,32 @@ function App(): React.JSX.Element {
       setAvailableGGUFs([]);
     }
   };
+  const handleDownloadModel = async (file: string) => {
+    const downloadUrl = `https://huggingface.co/${
+      HF_TO_GGUF[selectedModelFormat as keyof typeof HF_TO_GGUF]
+    }/resolve/main/${file}`;
+    // we set the isDownloading state to true to show the progress bar and set the progress to 0
+    setIsDownloading(true);
+    setProgress(0);
+
+    try {
+      // we download the model using the downloadModel function, it takes the selected GGUF file, the download URL, and a progress callback function to update the progress bar
+      const destPath = await downloadModel(file, downloadUrl, (progress) =>
+        setProgress(progress)
+      );
+
+      // Ensure the model is loaded only if the download was successful
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Download failed due to an unknown error.";
+      Alert.alert("Error", errorMessage);
+      setIsDownloading(false);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
   return (
     <SafeAreaView>
       <Text>Hello World</Text>
@@ -101,6 +129,18 @@ function App(): React.JSX.Element {
           <Text key={file}>{file}</Text>
         ))}
       </ScrollView>
+      <TouchableOpacity
+        onPress={() => {
+          setSelectedModelFormat("Llama-3.2-1B-Instruct");
+          // Add a small delay to ensure state is updated before download starts
+          setTimeout(() => {
+            handleDownloadModel("Llama-3.2-1B-Instruct-Q2_K.gguf");
+          }, 100);
+        }}
+      >
+        <Text>Download Model</Text>
+      </TouchableOpacity>
+      {isDownloading && <ProgressBar progress={progress} />}
     </SafeAreaView>
   );
 }
