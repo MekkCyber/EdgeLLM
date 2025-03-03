@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -13,8 +14,8 @@ import { useState } from "react";
 import axios from "axios";
 import { downloadModel } from "./src/api/model";
 import ProgressBar from "./src/components/ProgressBar";
-import {initLlama, releaseAllLlama} from 'llama.rn';
-import RNFS from 'react-native-fs'; // File system module
+import { initLlama, releaseAllLlama } from "llama.rn";
+import RNFS from "react-native-fs"; // File system module
 
 function App(): React.JSX.Element {
   type Message = {
@@ -124,32 +125,93 @@ function App(): React.JSX.Element {
   const loadModel = async (modelName: string) => {
     try {
       const destPath = `${RNFS.DocumentDirectoryPath}/${modelName}`;
-  
+
       // Ensure the model file exists before attempting to load it
       const fileExists = await RNFS.exists(destPath);
       if (!fileExists) {
-        Alert.alert('Error Loading Model', 'The model file does not exist.');
+        Alert.alert("Error Loading Model", "The model file does not exist.");
         return false;
       }
-  
+
       if (context) {
         await releaseAllLlama();
         setContext(null);
         setConversation(INITIAL_CONVERSATION);
       }
-  
+
       const llamaContext = await initLlama({
         model: destPath,
         use_mlock: true,
         n_ctx: 2048,
-        n_gpu_layers: 1
+        n_gpu_layers: 1,
       });
       console.log("llamaContext", llamaContext);
       setContext(llamaContext);
       return true;
     } catch (error) {
-      Alert.alert('Error Loading Model', error instanceof Error ? error.message : 'An unknown error occurred.');
+      Alert.alert(
+        "Error Loading Model",
+        error instanceof Error ? error.message : "An unknown error occurred."
+      );
       return false;
+    }
+  };
+  const handleSendMessage = async () => {
+    // Check if context is loaded and user input is valid
+    if (!context) {
+      Alert.alert("Model Not Loaded", "Please load the model first.");
+      return;
+    }
+
+    if (!userInput.trim()) {
+      Alert.alert("Input Error", "Please enter a message.");
+      return;
+    }
+
+    const newConversation: Message[] = [
+      // ... is a spread operator that spreads the previous conversation array to which we add the new user message
+      ...conversation,
+      { role: "user", content: userInput },
+    ];
+    setIsGenerating(true);
+    // Update conversation state and clear user input
+    setConversation(newConversation);
+    setUserInput("");
+
+    try {
+      // we define list the stop words for all the model formats
+      const stopWords = [
+        "</s>",
+        "<|end|>",
+        "user:",
+        "assistant:",
+        "<|im_end|>",
+        "<|eot_id|>",
+        "<|end▁of▁sentence|>",
+        "<｜end▁of▁sentence｜>",
+      ];
+      // now that we have the new conversation with the user message, we can send it to the model
+      const result = await context.completion({
+        messages: newConversation,
+        n_predict: 10000,
+        stop: stopWords,
+      });
+
+      // Ensure the result has text before updating the conversation
+      if (result && result.text) {
+        setConversation((prev) => [
+          ...prev,
+          { role: "assistant", content: result.text.trim() },
+        ]);
+      } else {
+        throw new Error("No response from the model.");
+      }
+    } catch (error) {
+      // Handle errors during inference
+      Alert.alert(
+        "Error During Inference",
+        error instanceof Error ? error.message : "An unknown error occurred."
+      );
     }
   };
   return (
@@ -174,25 +236,55 @@ function App(): React.JSX.Element {
               setSelectedModelFormat(format);
             }}
           >
-            <Text>
-              {format}
-            </Text>
+            <Text>{format}</Text>
           </TouchableOpacity>
         ))}
       </View>
-      <Text style={{ marginBottom: 10, color: selectedModelFormat ? 'black' : 'gray' }}>
-        {selectedModelFormat 
-          ? `Selected: ${selectedModelFormat}` 
-          : 'Please select a model format before downloading'}
+      <Text
+        style={{
+          marginBottom: 10,
+          color: selectedModelFormat ? "black" : "gray",
+        }}
+      >
+        {selectedModelFormat
+          ? `Selected: ${selectedModelFormat}`
+          : "Please select a model format before downloading"}
       </Text>
       <TouchableOpacity
-        onPress={() => {          // Then download the model
+        onPress={() => {
+          // Then download the model
           handleDownloadModel("Llama-3.2-1B-Instruct-Q2_K.gguf");
         }}
       >
         <Text>Download Model</Text>
       </TouchableOpacity>
       {isDownloading && <ProgressBar progress={progress} />}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          marginVertical: 10,
+          marginHorizontal: 10,
+        }}
+      >
+        <TextInput
+          style={{flex: 1, borderWidth: 1}}
+          value={userInput}
+          onChangeText={setUserInput}
+          placeholder="Type your message here..."
+        />
+        <TouchableOpacity
+          onPress={handleSendMessage}
+          style={{backgroundColor: "#007AFF"}}
+        >
+          <Text style={{ color: "white" }}>Send</Text>
+        </TouchableOpacity>
+      </View>
+      <ScrollView>
+        {conversation.map((msg, index) => (
+          <Text style={{marginVertical: 10}} key={index}>{msg.content}</Text>
+        ))}
+      </ScrollView>
     </SafeAreaView>
   );
 }
