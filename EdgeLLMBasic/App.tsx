@@ -244,6 +244,8 @@ function App(): React.JSX.Element {
         "Error During Inference",
         error instanceof Error ? error.message : "An unknown error occurred."
       );
+    } finally {
+      setIsGenerating(false);
     }
   };
   return (
