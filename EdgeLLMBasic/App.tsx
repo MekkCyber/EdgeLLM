@@ -13,6 +13,8 @@ import { useState } from "react";
 import axios from "axios";
 import { downloadModel } from "./src/api/model";
 import ProgressBar from "./src/components/ProgressBar";
+import {initLlama, releaseAllLlama} from 'llama.rn';
+import RNFS from 'react-native-fs'; // File system module
 
 function App(): React.JSX.Element {
   type Message = {
@@ -105,6 +107,9 @@ function App(): React.JSX.Element {
       );
 
       // Ensure the model is loaded only if the download was successful
+      if (destPath) {
+        await loadModel(file);
+      }
     } catch (error) {
       const errorMessage =
         error instanceof Error
@@ -114,6 +119,37 @@ function App(): React.JSX.Element {
       setIsDownloading(false);
     } finally {
       setIsDownloading(false);
+    }
+  };
+  const loadModel = async (modelName: string) => {
+    try {
+      const destPath = `${RNFS.DocumentDirectoryPath}/${modelName}`;
+  
+      // Ensure the model file exists before attempting to load it
+      const fileExists = await RNFS.exists(destPath);
+      if (!fileExists) {
+        Alert.alert('Error Loading Model', 'The model file does not exist.');
+        return false;
+      }
+  
+      if (context) {
+        await releaseAllLlama();
+        setContext(null);
+        setConversation(INITIAL_CONVERSATION);
+      }
+  
+      const llamaContext = await initLlama({
+        model: destPath,
+        use_mlock: true,
+        n_ctx: 2048,
+        n_gpu_layers: 1
+      });
+      console.log("llamaContext", llamaContext);
+      setContext(llamaContext);
+      return true;
+    } catch (error) {
+      Alert.alert('Error Loading Model', error instanceof Error ? error.message : 'An unknown error occurred.');
+      return false;
     }
   };
   return (
@@ -129,13 +165,29 @@ function App(): React.JSX.Element {
           <Text key={file}>{file}</Text>
         ))}
       </ScrollView>
+
+      <View style={{ marginTop: 30, marginBottom: 15 }}>
+        {Object.keys(HF_TO_GGUF).map((format) => (
+          <TouchableOpacity
+            key={format}
+            onPress={() => {
+              setSelectedModelFormat(format);
+            }}
+          >
+            <Text>
+              {format}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <Text style={{ marginBottom: 10, color: selectedModelFormat ? 'black' : 'gray' }}>
+        {selectedModelFormat 
+          ? `Selected: ${selectedModelFormat}` 
+          : 'Please select a model format before downloading'}
+      </Text>
       <TouchableOpacity
-        onPress={() => {
-          setSelectedModelFormat("Llama-3.2-1B-Instruct");
-          // Add a small delay to ensure state is updated before download starts
-          setTimeout(() => {
-            handleDownloadModel("Llama-3.2-1B-Instruct-Q2_K.gguf");
-          }, 100);
+        onPress={() => {          // Then download the model
+          handleDownloadModel("Llama-3.2-1B-Instruct-Q2_K.gguf");
         }}
       >
         <Text>Download Model</Text>
