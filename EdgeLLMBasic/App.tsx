@@ -103,8 +103,6 @@ function App(): React.JSX.Element {
       const destPath = await downloadModel(file, downloadUrl, (progress) =>
         setProgress(progress)
       );
-
-      // Ensure the model is loaded only if the download was successful
     } catch (error) {
       const errorMessage =
         error instanceof Error
@@ -129,13 +127,29 @@ function App(): React.JSX.Element {
           <Text key={file}>{file}</Text>
         ))}
       </ScrollView>
+
+      <View style={{ marginTop: 30, marginBottom: 15 }}>
+        {Object.keys(HF_TO_GGUF).map((format) => (
+          <TouchableOpacity
+            key={format}
+            onPress={() => {
+              setSelectedModelFormat(format);
+            }}
+          >
+            <Text>
+              {format}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <Text style={{ marginBottom: 10, color: selectedModelFormat ? 'black' : 'gray' }}>
+        {selectedModelFormat 
+          ? `Selected: ${selectedModelFormat}` 
+          : 'Please select a model format before downloading'}
+      </Text>
       <TouchableOpacity
-        onPress={() => {
-          setSelectedModelFormat("Llama-3.2-1B-Instruct");
-          // Add a small delay to ensure state is updated before download starts
-          setTimeout(() => {
-            handleDownloadModel("Llama-3.2-1B-Instruct-Q2_K.gguf");
-          }, 100);
+        onPress={() => {          // Then download the model
+          handleDownloadModel("Llama-3.2-1B-Instruct-Q2_K.gguf");
         }}
       >
         <Text>Download Model</Text>
